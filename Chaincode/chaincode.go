@@ -8,10 +8,11 @@ package simple
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stefanomozart/paillier"
 	"math/big"
 	"os"
 	"strconv"
+
+	"github.com/stefanomozart/paillier"
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
@@ -42,9 +43,8 @@ func (t *Patient) Init(stub shim.ChaincodeStubInterface) pb.Response {
 	fmt.Println("Init invoked...")
 
 	patientAssets := []Patient{
-		{PatientName: "Esad", PatientNationalID: "1", PatientFamilyID: "2", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Emin", PatientNationalID: "3", PatientFamilyID: "2", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Abdullah", PatientNationalID: "5", PatientFamilyID: "6", PatientDiseaseTable: [3]*big.Int{}},
+		{PatientName: "Ömer", PatientNationalID: "1", PatientFamilyID: "2", PatientDiseaseTable: [3]*big.Int{}},
+		{PatientName: "Sevde", PatientNationalID: "3", PatientFamilyID: "2", PatientDiseaseTable: [3]*big.Int{}},
 	}
 
 	fmt.Println("Ledger Created...")
@@ -53,15 +53,21 @@ func (t *Patient) Init(stub shim.ChaincodeStubInterface) pb.Response {
 
 		publicKey, privateKey, _ := paillier.GenerateKeyPair(3072)
 
+		fmt.Println("Keys Generated...")
+
 		paillerAsset := PaillerProps{
 			PublicKey:       publicKey,
 			PrivateKey:      privateKey,
 			PatientFamilyID: patient.PatientFamilyID,
 		}
 
-		for _, disease := range patient.PatientDiseaseTable {
-			disease, _ = publicKey.Encrypt(disease.Int64())
+		fmt.Println("Pailler Props Generated...")
+
+		for index, _ := range patient.PatientDiseaseTable {
+			patient.PatientDiseaseTable[index], _ = publicKey.Encrypt(0)
 		}
+
+		fmt.Println("Encryption Done...")
 
 		patientJSON, err := json.Marshal(patient)
 		if err != nil {
@@ -129,32 +135,84 @@ func (t *Patient) addPatient(stub shim.ChaincodeStubInterface, args []string) pb
 		return shim.Error("Incorrect number of arguments. Expecting 6")
 	}
 
-	val, err := stub.GetState("3")
+	var paillerAsset PaillerProps
+	patientNationalID := args[1]
+	patientFamilyID := args[2]
+
+	val, err := stub.GetState(patientNationalID)
 	if err != nil {
-		firstDisease, _ := strconv.Atoi(args[3])
-		secondDisease, _ := strconv.Atoi(args[4])
-		thirdDisease, _ := strconv.Atoi(args[5])
-		asset :=
-			Patient{
-				PatientName:         args[0],
-				PatientNationalID:   args[1],
-				PatientFamilyID:     args[2],
-				PatientDiseaseTable: [3]*big.Int{firstDisease, secondDisease, thirdDisease},
-			}
-
-		assetJSON, err := json.Marshal(asset)
-		if err != nil {
-			return shim.Error("Asset cannot encoded right now...")
-		}
-
-		err = stub.PutState(asset.PatientNationalID, assetJSON)
-		if err != nil {
-			return shim.Error("Failed in put state...")
-		}
-
-		return shim.Success(nil)
+		return shim.Error("Patient Already Exist : " + string(val))
 	}
-	return shim.Error("Patient Already Exist : " + string(val))
+
+	asset, err := stub.GetState(patientFamilyID)
+	if err != nil {
+		return shim.Error("Error From Pailler Ledger")
+	}
+
+	if len(asset) == 0 {
+		fmt.Println("Family Tree Doesn't Exist")
+		publicKey, privateKey, _ := paillier.GenerateKeyPair(3072)
+		fmt.Println("Keys Generated...")
+		paillerAsset = PaillerProps{
+			PublicKey:       publicKey,
+			PrivateKey:      privateKey,
+			PatientFamilyID: patientFamilyID,
+		}
+		fmt.Println("Pailler Props Generated...")
+	} else {
+		err = json.Unmarshal(asset, &paillerAsset)
+	}
+
+	fmt.Println(paillerAsset.PatientFamilyID)
+	fmt.Println("Fetched Pailler Asset")
+
+	firstDisease, err := strconv.Atoi(args[3])
+	if err != nil {
+		return shim.Error("Atoi error")
+	}
+	secondDisease, err := strconv.Atoi(args[4])
+	thirdDisease, err := strconv.Atoi(args[5])
+
+	firstDiseaseEncrypted, err := paillerAsset.PublicKey.Encrypt(int64(firstDisease))
+	if err != nil {
+		return shim.Error("Encryption error")
+	}
+	secondDiseaseEncrypted, err := paillerAsset.PublicKey.Encrypt(int64(secondDisease))
+	thirdDiseaseEncrypted, err := paillerAsset.PublicKey.Encrypt(int64(thirdDisease))
+
+	fmt.Println("Encryption Done...")
+
+	patient :=
+		Patient{
+			PatientName:         args[0],
+			PatientNationalID:   patientNationalID,
+			PatientFamilyID:     patientFamilyID,
+			PatientDiseaseTable: [3]*big.Int{firstDiseaseEncrypted, secondDiseaseEncrypted, thirdDiseaseEncrypted},
+		}
+
+	patientJSON, err := json.Marshal(patient)
+	if err != nil {
+		return shim.Error("Asset cannot encoded right now...")
+	}
+
+	err = stub.PutState(patient.PatientNationalID, patientJSON)
+	if err != nil {
+		return shim.Error("Failed in put state...")
+	}
+
+	paillerJSON, err := json.Marshal(paillerAsset)
+	if err != nil {
+		return shim.Error("Asset cannot encoded right now...")
+	}
+
+	err = stub.PutState(paillerAsset.PatientFamilyID, paillerJSON)
+	if err != nil {
+		return shim.Error("Failed in put state...")
+	}
+
+	fmt.Println("Patient Succesfully Saved...")
+
+	return shim.Success(nil)
 }
 
 // Deletes an entity from state
@@ -207,7 +265,7 @@ func (t *Patient) readAllPatients(stub shim.ChaincodeStubInterface) pb.Response 
 		fmt.Println("Key : " + string(queryResult.Key) + " |  Name : " + (queryResult.Record.PatientName))
 		fmt.Print("[ ")
 		for _, value := range queryResult.Record.PatientDiseaseTable {
-			fmt.Print(strconv.Itoa(value) + " ")
+			fmt.Print(strconv.Itoa(int(value.Int64())) + " ")
 		}
 		fmt.Print("]")
 		fmt.Println("*************************************************")
@@ -279,14 +337,36 @@ func (t *Patient) queryPatient(stub shim.ChaincodeStubInterface, args []string) 
 		return shim.Error("Incorrect number of arguments. Expecting 1")
 	}
 
+	var patient Patient
+	var patientProps PaillerProps
 	nationalID := args[0]
 
-	asset, err := stub.GetState(nationalID)
+	patientAsset, err := stub.GetState(nationalID)
 	if err != nil {
 		return shim.Error("Patient doesn't exist")
 	}
 
-	fmt.Println(string(asset))
+	err = json.Unmarshal(patientAsset, &patient)
+	if err != nil {
+		return shim.Error("Patient can't be fetched")
+	}
+
+	fmt.Println((patient.PatientName))
+
+	paillerAsset, err := stub.GetState(patient.PatientNationalID)
+	if err != nil {
+		return shim.Error("Pailler Props can't be fetched")
+	}
+
+	err = json.Unmarshal(paillerAsset, &patientProps)
+	if err != nil {
+		return shim.Error("Patient can't be fetched")
+	}
+
+	for _, value := range patient.PatientDiseaseTable {
+		fmt.Println(patientProps.PrivateKey.Decrypt(value))
+	}
+
 	return shim.Success(nil)
 }
 
