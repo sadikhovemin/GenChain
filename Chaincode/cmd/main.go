@@ -50,7 +50,7 @@ func main() {
 	})
 
 	go func() {
-		err := shim.Start(&simple.SimpleChaincode{})
+		err := shim.Start(&simple.Patient{})
 		if err != nil {
 			startErrChan <- err
 		}
