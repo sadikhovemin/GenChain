@@ -9,11 +9,8 @@ import (
 // the corresponding plaintext messages (`m1`, `m2`) ciphered to (`ct1`, `ct2`)
 // (i.e if ct1 = Enc(m1) and ct2 = Enc(m2), then Dec(Add(ct1, ct2)) = m1 + m2 mod N)
 func (pk *PublicKey) Add(ct1, ct2 *big.Int) (*big.Int, error) {
-	if ct1 == nil || ct2 == nil || ct1.Cmp(zero) != 1 || ct2.Cmp(zero) != 1 {
-		return nil, fmt.Errorf("invalid input")
-	}
 	z := new(big.Int).Mul(ct1, ct2)
-
+	fmt.Println(z.Mod(z, pk.N2))
 	return z.Mod(z, pk.N2), nil
 }
 
