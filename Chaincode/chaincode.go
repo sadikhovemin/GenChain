@@ -8,12 +8,12 @@ package simple
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hyperledger/fabric-chaincode-go/shim"
-	pb "github.com/hyperledger/fabric-protos-go/peer"
-	"github.com/hyperledger/fabric/integration/chaincode/simple/paillerCrypto"
 	"math/big"
 	"os"
 	"strconv"
+
+	"github.com/hyperledger/fabric-chaincode-go/shim"
+	pb "github.com/hyperledger/fabric-protos-go/peer"
 )
 
 type Patient struct {
