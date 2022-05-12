@@ -14,6 +14,7 @@ import (
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
+	Pailler "github.com/hyperledger/fabric-samples/asset-transfer-basic/chaincode-go/chaincode/paillerCrypto"
 )
 
 type Patient struct {
@@ -46,20 +47,20 @@ type PaillerResult struct {
 
 func (t *Patient) Init(stub shim.ChaincodeStubInterface) pb.Response {
 
-	fmt.Println("Init invoked...")
+	var zero = new(big.Int).SetInt64(0)
 
 	patients := []Patient{
-		{PatientName: "Erhan", PatientNationalID: "112", PatientFamilyID: "20", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Aysegul", PatientNationalID: "113", PatientFamilyID: "20", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Ahmet", PatientNationalID: "111", PatientFamilyID: "20", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Recep", PatientNationalID: "114", PatientFamilyID: "21", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Nusret", PatientNationalID: "115", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Asli", PatientNationalID: "116", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Safiye", PatientNationalID: "117", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Mushab", PatientNationalID: "118", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Sakir", PatientNationalID: "119", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Yadigar", PatientNationalID: "120", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{}},
-		{PatientName: "Hamza", PatientNationalID: "121", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{}},
+		{PatientName: "Erhan", PatientNationalID: "112", PatientFamilyID: "20", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Aysegul", PatientNationalID: "113", PatientFamilyID: "20", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Ahmet", PatientNationalID: "111", PatientFamilyID: "20", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Recep", PatientNationalID: "114", PatientFamilyID: "21", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Nusret", PatientNationalID: "115", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Asli", PatientNationalID: "116", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Safiye", PatientNationalID: "117", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Mushab", PatientNationalID: "118", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Sakir", PatientNationalID: "119", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Yadigar", PatientNationalID: "120", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
+		{PatientName: "Hamza", PatientNationalID: "121", PatientFamilyID: "22", PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
 	}
 
 	previousFamilyID := patients[0].PatientFamilyID

@@ -1,9 +1,9 @@
 package Pailler
 
 import (
-	"crypto/rand"
 	"fmt"
 	"math/big"
+	"math/rand"
 )
 
 // PublicKey is used to perform encryption and homomorphic operations
@@ -23,14 +23,38 @@ type PrivateKey struct {
 var zero = new(big.Int).SetInt64(0)
 var one = new(big.Int).SetInt64(1)
 
+func isPrime(number int) bool {
+	for i := 2; i < number; i++ {
+		if number%i == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // GenerateKeyPair returns a Paillier key pair such that the squared modulus `N2`, in the
 // public key, has a bit length equivalent to the value informed in the `bitlen` parameter
-func GenerateKeyPair(bitlen int) (*PublicKey, *PrivateKey, error) {
-	if bitlen < 1024 {
-		return nil, nil, fmt.Errorf("The `bitlen` parameter should not be smaller then 1024")
+func GenerateKeyPair(patientFamilyID int) (*PublicKey, *PrivateKey, error) {
+
+	nextPrimeNumber := patientFamilyID
+
+	for {
+		if isPrime(nextPrimeNumber) {
+			break
+		}
+		nextPrimeNumber++
 	}
-	p := getPrime(bitlen / 2)
-	q := getPrime(bitlen / 2)
+	p := big.NewInt(int64(nextPrimeNumber))
+
+	nextPrimeNumber++
+
+	for {
+		if isPrime(nextPrimeNumber) {
+			break
+		}
+		nextPrimeNumber++
+	}
+	q := big.NewInt(int64(nextPrimeNumber))
 
 	n := new(big.Int).Mul(p, q)
 	nn := new(big.Int).Mul(n, n)
@@ -79,14 +103,14 @@ func (pk *PublicKey) ToString() (string, string) {
 }
 
 // Encrypt returns a IND-CPA secure ciphertext for the message `msg`
-func (pk *PublicKey) Encrypt(msg int64) (*big.Int, error) {
+func (pk *PublicKey) Encrypt(msg int64, patientNationalID int64) (*big.Int, error) {
 	m := new(big.Int).SetInt64(msg)
 
 	if msg < 0 || m.Cmp(zero) == -1 || m.Cmp(pk.N) != -1 {
 		return nil, fmt.Errorf("invalid plaintext")
 	}
 
-	r := getRandom(pk.N)
+	r := getRandom(pk.N, patientNationalID)
 	r.Exp(r, pk.N, pk.N2)
 
 	m.Exp(pk.G, m, pk.N2)
@@ -117,28 +141,14 @@ func L(x, n *big.Int) *big.Int {
 	return new(big.Int).Div(new(big.Int).Sub(x, one), n)
 }
 
-// generates a random number, testing if it is a probable prime
-func getPrime(bits int) *big.Int {
-	p, err := rand.Prime(rand.Reader, bits)
-	if err != nil {
-		panic("Error while reading crypto/rand")
-	}
-
-	return p
-}
-
 // getRandom generates a random Int `r` such that `r < n` and `gcd(r,n) = 1`
-func getRandom(n *big.Int) *big.Int {
+func getRandom(n *big.Int, patientNationalID int64) *big.Int {
+	rand.Seed(patientNationalID)
 	gcd := new(big.Int)
 	r := new(big.Int)
-	err := fmt.Errorf("")
 
 	for gcd.Cmp(one) != 0 {
-		r, err = rand.Int(rand.Reader, n)
-		if err != nil {
-			panic("Error while reading crypto/rand")
-		}
-
+		r = big.NewInt(rand.Int63())
 		gcd = new(big.Int).GCD(nil, nil, r, n)
 	}
 	return r
