@@ -3,10 +3,11 @@ package chaincode
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	Pailler "github.com/hyperledger/fabric-samples/asset-transfer-basic/chaincode-go/chaincode/paillerCrypto"
 	"math/big"
 	"strconv"
+
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+	Pailler "github.com/hyperledger/fabric-samples/asset-transfer-basic/chaincode-go/chaincode/paillerCrypto"
 )
 
 // SmartContract provides functions for managing an Asset
@@ -19,11 +20,6 @@ type Patient struct {
 	PatientNationalID   int         `json:"patientNationalID"`
 	PatientFamilyID     int         `json:"patientFamilyID"`
 	PatientDiseaseTable [3]*big.Int `json:"patientDiseaseTable"`
-}
-
-type PaillerKey struct {
-	PatientFamilyID int                 `json:"patientFamilyID"`
-	Key             *Pailler.PrivateKey `json:"key"`
 }
 
 type Diseases struct {
@@ -52,25 +48,10 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 		{PatientName: "Hamza", PatientNationalID: 121, PatientFamilyID: 22, PatientDiseaseTable: [3]*big.Int{zero, zero, zero}},
 	}
 
-	selectedFamilyID := patients[0].PatientFamilyID
-	var paillerAssets []PaillerKey
-
-	publicKey, privateKey, _ := Pailler.GenerateKeyPair(selectedFamilyID)
-	N, g := publicKey.ToString()
-	publicKey2, _ := Pailler.NewPublicKey(N, g)
-
-	paillerAsset := PaillerKey{PatientFamilyID: patients[0].PatientFamilyID, Key: privateKey}
-	paillerAssets = append(paillerAssets, paillerAsset)
-
 	for _, asset := range patients {
-		if selectedFamilyID != asset.PatientFamilyID {
-			selectedFamilyID = asset.PatientFamilyID
-			publicKey, privateKey, _ = Pailler.GenerateKeyPair(selectedFamilyID)
-			N, g = publicKey.ToString()
-			publicKey2, _ = Pailler.NewPublicKey(N, g)
-			pailler := PaillerKey{PatientFamilyID: asset.PatientFamilyID, Key: privateKey}
-			paillerAssets = append(paillerAssets, pailler)
-		}
+		publicKey, _, _ := Pailler.GenerateKeyPair(asset.PatientFamilyID)
+		N, g := publicKey.ToString()
+		publicKey2, _ := Pailler.NewPublicKey(N, g)
 
 		for index := range asset.PatientDiseaseTable {
 			asset.PatientDiseaseTable[index], _ = publicKey2.Encrypt(asset.PatientDiseaseTable[index].Int64(), int64(asset.PatientNationalID))
@@ -98,18 +79,6 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 		return err
 	}
 
-	for _, paillerAsset := range paillerAssets {
-		paillerJSON, err := json.Marshal(paillerAsset)
-		if err != nil {
-			return err
-		}
-		keyFamilyID := strconv.Itoa(paillerAsset.PatientFamilyID)
-		err = ctx.GetStub().PutState(keyFamilyID, paillerJSON)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -134,35 +103,29 @@ func (s *SmartContract) ReadAsset(ctx contractapi.TransactionContextInterface, p
 	return err
 }
 
-// ReadAsset returns the asset stored in the world state with given id.
-func (s *SmartContract) ReadPailler(ctx contractapi.TransactionContextInterface, patientFamilyID string) error {
-	assetJSON, err := ctx.GetStub().GetState(patientFamilyID)
-	if err != nil {
-		return err
-	}
-	if assetJSON == nil {
-		return err
-	}
-
-	var asset PaillerKey
-	err = json.Unmarshal(assetJSON, &asset)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(asset.Key.Pk.N)
-
-	return err
-}
-
 // AssetExists returns true when asset with given ID exists in world state
 func (s *SmartContract) AssetExists(ctx contractapi.TransactionContextInterface, id string) (bool, error) {
 	assetJSON, err := ctx.GetStub().GetState(id)
 	if err != nil {
 		return false, fmt.Errorf("failed to read from world state: %v", err)
 	}
-
 	return assetJSON != nil, nil
+}
+
+// ChangeAsset returns true when asset with given ID exists in world state
+func (s *SmartContract) ChangeAsset(ctx contractapi.TransactionContextInterface, patientNationalID int, diseaseIndex int) error {
+	patient := getPatient(ctx, patientNationalID)
+
+	publicKey, _, _ := Pailler.GenerateKeyPair(patient.PatientFamilyID)
+	N, g := publicKey.ToString()
+	publicKey2, _ := Pailler.NewPublicKey(N, g)
+
+	patient.PatientDiseaseTable[diseaseIndex], _ = publicKey2.Encrypt(1, int64(patientNationalID))
+
+	fmt.Println("Patient's Disease Value Is Changed")
+	fmt.Println(patient)
+
+	return nil
 }
 
 // GetAllAssets returns all assets found in world state
@@ -202,44 +165,27 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 		return fmt.Errorf("the asset %s already exists", patientNationalID)
 	}
 
-	var paillerAsset PaillerKey
-	patientFamilyID_Int, err := strconv.Atoi(patientFamilyID)
-	patientNationalID_Int, err := strconv.Atoi(patientNationalID)
+	patientfamilyidInt, err := strconv.Atoi(patientFamilyID)
+	patientnationalidInt, err := strconv.Atoi(patientNationalID)
 
-	asset, err := ctx.GetStub().GetState(patientFamilyID)
-	if err != nil {
-		return err
-	}
+	publicKey, _, _ := Pailler.GenerateKeyPair(patientfamilyidInt)
+	N, g := publicKey.ToString()
+	publicKey2, _ := Pailler.NewPublicKey(N, g)
 
-	if len(asset) == 0 {
-		fmt.Println("Family Tree Doesn't Exist")
-		_, privateKey, _ := Pailler.GenerateKeyPair(patientFamilyID_Int)
-		fmt.Println("Keys Generated...")
-		paillerAsset = PaillerKey{
-			PatientFamilyID: patientFamilyID_Int,
-			Key:             privateKey,
-		}
-		fmt.Println("Pailler Props Generated...")
-	} else {
-		err = json.Unmarshal(asset, &paillerAsset)
-	}
-
-	firstDiseaseEncrypted, err := paillerAsset.Key.Pk.Encrypt(int64(firstDisease), int64(patientNationalID_Int)) // First Disease Value Encryption
+	firstDiseaseEncrypted, err := publicKey2.Encrypt(int64(firstDisease), int64(patientnationalidInt)) // First Disease Value Encryption
 	if err != nil {
 		return fmt.Errorf("encryption error")
 	}
-	secondDiseaseEncrypted, err := paillerAsset.Key.Pk.Encrypt(int64(secondDisease), int64(patientNationalID_Int)) // Second Disease Value Encryption
-	thirdDiseaseEncrypted, err := paillerAsset.Key.Pk.Encrypt(int64(thirdDisease), int64(patientNationalID_Int))   // Third Disease Value Encryption
+	secondDiseaseEncrypted, err := publicKey2.Encrypt(int64(secondDisease), int64(patientnationalidInt)) // Second Disease Value Encryption
+	thirdDiseaseEncrypted, err := publicKey2.Encrypt(int64(thirdDisease), int64(patientnationalidInt))   // Third Disease Value Encryption
 
 	patient :=
 		Patient{
 			PatientName:         patientName,
-			PatientNationalID:   patientNationalID_Int,
-			PatientFamilyID:     patientFamilyID_Int,
+			PatientNationalID:   patientnationalidInt,
+			PatientFamilyID:     patientfamilyidInt,
 			PatientDiseaseTable: [3]*big.Int{firstDiseaseEncrypted, secondDiseaseEncrypted, thirdDiseaseEncrypted},
 		}
-
-	fmt.Println(patient)
 
 	patientJSON, err := json.Marshal(patient) // Patient Information Encoded as JSON
 	if err != nil {
@@ -251,28 +197,26 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 		return fmt.Errorf("failed in put state")
 	}
 
-	paillerJSON, err := json.Marshal(paillerAsset) // Pailler Key Information Encoded as JSON
-	if err != nil {
-		return fmt.Errorf("asset cannot encoded right now")
-	}
+	return nil
+}
 
-	err = ctx.GetStub().PutState(patientFamilyID, paillerJSON) // Pailler Key Information Saved To The Ledger
+func (s *SmartContract) DeleteAsset(ctx contractapi.TransactionContextInterface, patientNationalID string) error {
+	// Delete the key from the state in ledger
+	err := ctx.GetStub().DelState(patientNationalID)
 	if err != nil {
-		return fmt.Errorf("failed in put state")
+		return err
 	}
-
 	return nil
 }
 
 // TransferAsset updates the owner field of asset with given id in world state.
 func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterface, patientNationalID string, diseaseIndex int) error {
 
-	ancestorIds := []string{"115", "116", "119", "120"}
+	ancestorIds := []int{115, 116, 119, 120}
 
 	level := 0
 
 	patient := new(Patient)
-	patientProps := new(PaillerKey)
 	disease := new(Diseases)
 
 	patientAsset, err := ctx.GetStub().GetState(patientNationalID)
@@ -284,16 +228,9 @@ func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterfac
 		return fmt.Errorf("patient can't be fetched")
 	}
 
-	patientFamilyID_String := strconv.Itoa(patient.PatientFamilyID)
-
-	paillerAsset, err := ctx.GetStub().GetState(patientFamilyID_String)
-	if err != nil {
-		return fmt.Errorf("pailler Props can't be fetched")
-	}
-	err = json.Unmarshal(paillerAsset, patientProps)
-	if err != nil {
-		return fmt.Errorf("PaillerProps can't be fetched")
-	}
+	publicKey, privateKey, _ := Pailler.GenerateKeyPair(patient.PatientFamilyID)
+	N, g := publicKey.ToString()
+	publicKey2, _ := Pailler.NewPublicKey(N, g)
 
 	diseaseAsset, err := ctx.GetStub().GetState("DiseaseTable")
 	if err != nil {
@@ -305,13 +242,11 @@ func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterfac
 	}
 
 	diseaseProbability := disease.Achondroplasia
-	fmt.Println(diseaseProbability)
-	result, _ := patientProps.Key.Pk.Encrypt(0, int64(patient.PatientNationalID))
+	result, _ := publicKey2.Encrypt(0, int64(patient.PatientNationalID))
 
 	fmt.Println("******************************")
 	fmt.Println(patient.PatientName)
 	fmt.Println(patient.PatientNationalID)
-	fmt.Println(patientProps.PatientFamilyID)
 	fmt.Println("******************************")
 
 	for i := 0; i < 4; i += 2 {
@@ -320,50 +255,55 @@ func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterfac
 
 		fatherId := ancestorIds[i]
 		fatherPatient := getPatient(ctx, fatherId)
-		fmt.Println("Father Name Is : " + fatherPatient.PatientName)
-		probability, _ := fatherPatient.calcualte(patientProps, diseaseProbability, level, diseaseIndex)
-		fmt.Println("Father Calculation Done " + fatherPatient.PatientName)
+		probability, _ := fatherPatient.calculate(publicKey2, diseaseProbability, level, diseaseIndex)
+		fmt.Println("Father's Calculation Done " + fatherPatient.PatientName)
 		fmt.Print("Probability : ")
 		fmt.Println(probability)
-		fmt.Print("Decrypt Probability : ")
-		fmt.Println(patientProps.Key.Decrypt(probability))
-		result, _ = patientProps.Key.Pk.Add(result, probability)
+		dResult, _ := privateKey.Decrypt(probability)
+		dResultString := strconv.Itoa(int(dResult))
+		fmt.Println(" Total Result Decrypted Probability is  : " + dResultString + "%")
+		result, _ = publicKey2.Add(result, probability)
 
 		fmt.Print("Result : ")
 		fmt.Println(result)
 		fmt.Print("Decrypt Result : ")
-		fmt.Println(patientProps.Key.Decrypt(result))
+		fmt.Println(privateKey.Decrypt(result))
 
 		motherId := ancestorIds[i+1]
 		motherPatient := getPatient(ctx, motherId)
-		fmt.Println("Mother Name Is : " + motherPatient.PatientName)
-		probability, err = motherPatient.calcualte(patientProps, diseaseProbability, level, diseaseIndex)
-		fmt.Println("Mother Calculation Done " + motherPatient.PatientName)
+		probability, err = motherPatient.calculate(publicKey2, diseaseProbability, level, diseaseIndex)
+		fmt.Println("Mother's Calculation Done " + motherPatient.PatientName)
 		fmt.Print("Probability : ")
 		fmt.Println(probability)
-		fmt.Print("Decrypt Probability : ")
-		fmt.Println(patientProps.Key.Decrypt(probability))
-		result, _ = patientProps.Key.Pk.Add(result, probability)
+		dResult, _ = privateKey.Decrypt(probability)
+		dResultString = strconv.Itoa(int(dResult))
+		fmt.Println(" Total Result Decrypted Probability is  : " + dResultString + "%")
+		result, _ = publicKey2.Add(result, probability)
 
-		fmt.Print("Result : ")
+		fmt.Print("Final Result : ")
 		fmt.Println(result)
-		fmt.Print("Decrypt Result : ")
-		fmt.Println(patientProps.Key.Decrypt(result))
+		fmt.Print("Decrypted Final Result : ")
+		fmt.Println(privateKey.Decrypt(result))
 	}
 
 	fmt.Println("******************************")
-	fmt.Println(result)
+	fmt.Println("Encrypted Result : " + result.String())
 	fmt.Println("******************************")
-	fmt.Println(patientProps.Key.Decrypt(result))
+	dResult, err := privateKey.Decrypt(result)
+	dResultString := strconv.Itoa(int(dResult))
+	if err != nil {
+		return fmt.Errorf("PaillerProps can't be fetched")
+	}
+	fmt.Println("The Probability of Patient's Having Achondroplasia Disease Is : " + dResultString + "%")
 	fmt.Println("******************************")
-
 	return nil
 
 }
 
-func getPatient(ctx contractapi.TransactionContextInterface, nationalID string) *Patient {
+func getPatient(ctx contractapi.TransactionContextInterface, nationalID int) *Patient {
 	patient := new(Patient)
-	patientAsset, err := ctx.GetStub().GetState(nationalID)
+	nationalIDString := strconv.Itoa(nationalID)
+	patientAsset, err := ctx.GetStub().GetState(nationalIDString)
 	if err != nil {
 		fmt.Println("GetState Error")
 	}
@@ -374,24 +314,8 @@ func getPatient(ctx contractapi.TransactionContextInterface, nationalID string) 
 	return patient
 }
 
-func getPaillerKey(ctx contractapi.TransactionContextInterface, familyID string) *PaillerKey {
-	paillerKey := new(PaillerKey)
-	paillerAsset, err := ctx.GetStub().GetState(familyID)
-	if err != nil {
-		fmt.Println("GetState Error")
-	}
-	err = json.Unmarshal(paillerAsset, paillerKey)
-	if err != nil {
-		fmt.Println("Unmarshal Error")
-	}
-	return paillerKey
-}
-
-func (t *Patient) calcualte(patientProps *PaillerKey, diseaseProbability int, level int, diseaseIndex int) (*big.Int, error) {
-	fmt.Println(t)
+func (t *Patient) calculate(patientProps *Pailler.PublicKey, diseaseProbability int, level int, diseaseIndex int) (*big.Int, error) {
 	diseaseValue := t.PatientDiseaseTable[diseaseIndex]
-	fmt.Println(diseaseValue)
 	diseaseContribution := diseaseProbability / level
-	fmt.Println(diseaseContribution)
-	return patientProps.Key.Pk.MultPlaintext(diseaseValue, int64(diseaseContribution))
+	return patientProps.MultPlaintext(diseaseValue, int64(diseaseContribution))
 }
