@@ -3,11 +3,10 @@ package chaincode
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
-	"strconv"
-
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 	Pailler "github.com/hyperledger/fabric-samples/asset-transfer-basic/chaincode-go/chaincode/paillerCrypto"
+	"math/big"
+	"strconv"
 )
 
 // SmartContract provides functions for managing an Asset
@@ -191,7 +190,7 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 	if err != nil {
 		return fmt.Errorf("asset cannot encoded right now")
 	}
-
+	
 	err = ctx.GetStub().PutState(patientNationalID, patientJSON) // Patinet Information Saved To The Ledger
 	if err != nil {
 		return fmt.Errorf("failed in put state")
